@@ -108,10 +108,10 @@ int main(int argc, char **argv){
 
 	//printf("%d", index);
 	//exit(0);
-	int i = 0;	
+	int i;
 	pid_t pidHolder[index];
 
-	while(i < index){
+	for(i = 0; i < index; i++){
 
 		char arg1[MAX_CHARS];  
 		snprintf(arg1, MAX_CHARS, "%d", i); 
@@ -121,15 +121,11 @@ int main(int argc, char **argv){
 		
 		//printf("I=%d\n", i);
 		if(children > maxTotalForks){
-			wait(&status);
 			printf("waiting");
+			wait(&status);
 		}//end if
-		
-		if((pidHolder[i] = fork()) == -1){
-			perror("ERROR forking");
-		}
 
-		else if((pidHolder[i] = fork()) == 0){
+		if((pidHolder[i] = fork()) == 0){
 			execl("./palin", "palin", arg1, arg2, NULL);
 			exit(0);
 		}
@@ -158,6 +154,7 @@ int main(int argc, char **argv){
 				}//end else if
 				else
 					printf("program didn't terminate normally\n");
+					
 			}//end if
 			else{
 				// waitpid() failed 
@@ -165,11 +162,12 @@ int main(int argc, char **argv){
 			}//end else
 			//exit(0);
 		}//end else
-		i++;
 	}//end for
 	
 	//printf("CHILDREN = %d\n", children);
+	free(input);
 	shmdt(shm);
+	shmctl(shmid, IPC_RMID, NULL);
 	return 0;
 }//end main
 
@@ -197,7 +195,7 @@ static int setupinterrupt(void){
 static int setupitimer(void){
 	
 	struct itimerval value;
-	value.it_interval.tv_sec = 2;
+	value.it_interval.tv_sec = 25;
 	value.it_interval.tv_usec = 0;
 	value.it_value = value.it_interval;
 	return (setitimer(ITIMER_PROF, &value, NULL));

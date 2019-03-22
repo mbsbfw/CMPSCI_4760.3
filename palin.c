@@ -8,6 +8,7 @@
 #include <sys/shm.h>
 #include <signal.h>
 #include <semaphore.h>
+#include <fcntl.h>
 
 #define MAX_CHARS 80
 #define MAX_LINES 100
@@ -33,16 +34,18 @@ int main(int argc, char **argv){
 	if(shmid < 0){
 		
 		perror("ERROR: shmget");
-	}
-
-	//char (*shm)[MAX_LINES][MAX_CHARS] = NULL; 
+	} 
 
 	//attach shared memory to address space of calling process
 	shm = shmat(shmid, (void*)0, 0);
 	
-	printf("DATA read from memory: %s\n", ((*shm)[index]));
+	//printf("DATA read from memory: %s\n", ((*shm)[index]));
 
-	isPalindrome(length, index);
+	if(isPalindrome(length, index)){
+		palindrome(index);
+	}
+	else
+		noPalindrome(index);
 
 	shmdt(shm);
 
@@ -53,24 +56,44 @@ int main(int argc, char **argv){
 int isPalindrome(int length, int index){
 	int begin = 0; 
 	while(length > begin){ 
-		if((*shm)[index][length--] != (*shm)[index][begin++]) 
+		if((*shm)[index][length--] != (*shm)[index][begin++]){ 
 			//printf("WE ARE NOt PALINDROME\n");
-			noPalindrome(index);
+			return 0;
+		}
 	}//end while
-
-	if((*shm)[index][length] == (*shm)[index][begin]){ 
-		//printf("PALINDROME\n");
-		palindrome(index);
-	}
-
+	return 1;
 }
 
 void palindrome(int index){
-	printf("[PID]%i PALINDROME\n", getpid());
+	srand(time(0));
+	printf("[PID]%i %s", getpid(), (*shm)[index]);
+	sem_t *palinSem = sem_open("SemPalin", O_CREAT, 0644, 1); 
+	
+	sem_wait(palinSem);
+	fprintf(stderr, "Enter CS [%i]\n", time(NULL));
+	sleep(rand()%3 + 1);
+	FILE *output = fopen("palin.out", "a");
+	fprintf(output, "%i\t%i\t%s", getpid(), index, ((*shm)[index]));
+	fclose(output);
+	sleep(rand()%3 + 1);
+	fprintf(stderr, "Exit CS [%i]\n\n", time(NULL));
+	sem_post(palinSem);
 }
 
 void noPalindrome(int index){
-	printf("WE ARE NOt PALINDROME\n"); 
+	srand(time(0));
+	printf("[PID]%i %s", getpid(), (*shm)[index]); 
+	sem_t *noPalinSem = sem_open("SemNoPalin", O_CREAT, 0644, 1); 
+
+	sem_wait(noPalinSem);                                                          
+	fprintf(stderr, "Enter CS [%i]\n", time(NULL));                                        
+	sleep(rand()%3 + 1);                                                             
+	FILE *output = fopen("noPalin.out", "a");                                      
+	fprintf(output, "%i\t%i\t%s", getpid(), index, ((*shm)[index]));             
+	fclose(output);                                                              
+	sleep(rand()%3 + 1);                                                             
+	fprintf(stderr, "Exit CS [%i]\n\n", time(NULL));                                         
+	sem_post(noPalinSem);
 }
 
 
