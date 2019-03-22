@@ -13,7 +13,7 @@
 #define MAX_LINES 100
 #define MAX_CHARS 80
 #define SHMKEY 314159
-#define BUFF_SZ sizeof(char)*MAX_CHARS
+#define BUFF_SZ sizeof(char)*80
 
 static void myhandler(int s);
 static int setupinterrupt(void);
@@ -34,8 +34,13 @@ int main(int argc, char **argv){
 	//most variables
 	int maxTotalForks = 4;
 	int option;
-	int i = 0;
+	int status;
+	int index = 0;
+	int children = 0;
+	int length[MAX_LINES]; 
 	char readLine[MAX_CHARS];
+	sem_t *palinSem;
+	sem_t *nopalinSem;
 
 	char * input = malloc(80 * sizeof(char) + 1);
 
@@ -78,7 +83,7 @@ int main(int argc, char **argv){
 	}
 
 	//create shared memory
-	int shmid = shmget(SHMKEY, BUFF_SZ, IPC_CREAT | 0666);
+	int shmid = shmget(SHMKEY, BUFF_SZ, 0666 | IPC_CREAT);
 	
 	if(shmid < 0){
 		perror("ERROR: shmget");
@@ -88,18 +93,82 @@ int main(int argc, char **argv){
 	
 	//attach shared memory to address space of calling process
 	shm = shmat(shmid, (void*)0, 0);
-
+	
+	//read from file and put in shared memory
 	while(!feof(fPointer)){
 
 		if(fgets(readLine, MAX_CHARS, fPointer)){
-
-			printf("DATA written in memory: %s\n", readLine);
-			strcpy((*shm)[i], readLine);
-			i++; 	
+			
+			length[index] = strlen(readLine) - 2;		
+			strcpy((*shm)[index], readLine);
+			printf("DATA written in memory: %s\n", ((*shm)[index]));
+			index++; 	
 		}
 	}//end while
 
-	printf("COPIED DATA: %s", &shm[0]);
+	//printf("%d", index);
+	//exit(0);
+	int i = 0;	
+	pid_t pidHolder[index];
+
+	while(i < index){
+
+		char arg1[MAX_CHARS];  
+		snprintf(arg1, MAX_CHARS, "%d", i); 
+	
+		char arg2[length[i]];
+		snprintf(arg2, MAX_CHARS, "%d", length[i]);
+		
+		//printf("I=%d\n", i);
+		if(children > maxTotalForks){
+			wait(&status);
+			printf("waiting");
+		}//end if
+		
+		if((pidHolder[i] = fork()) == -1){
+			perror("ERROR forking");
+		}
+
+		else if((pidHolder[i] = fork()) == 0){
+			execl("./palin", "palin", arg1, arg2, NULL);
+			exit(0);
+		}
+
+		else{
+			//printf("increment the children\n");
+			children++;
+
+			if(waitpid(pidHolder[i], &status, 0) > 0){
+
+				if (WIFEXITED(status) && !WEXITSTATUS(status)){
+					//printf("program execution successfull\n");
+					//printf("decrement the children\n");
+					children--;
+				}
+
+				else if (WIFEXITED(status) && WEXITSTATUS(status)) {
+					if (WEXITSTATUS(status) == 127) {
+
+						// execv failed
+						printf("execv failed\n"); 
+					}//end if
+					else
+						printf("program terminated normally,"
+						" but returned a non-zero status\n");
+				}//end else if
+				else
+					printf("program didn't terminate normally\n");
+			}//end if
+			else{
+				// waitpid() failed 
+				printf("waitpid() failed\n");
+			}//end else
+			//exit(0);
+		}//end else
+		i++;
+	}//end for
+	
+	//printf("CHILDREN = %d\n", children);
 	shmdt(shm);
 	return 0;
 }//end main
